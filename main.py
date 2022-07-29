@@ -25,15 +25,20 @@ ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN = range(7)
 
 
 def main_handler(update, context):
-    bot = telegram.Bot(token=tg_token)
-    bot.send_message(chat_id=update.message.chat.id, text=update.message.text)
     chat_id = update.message.chat.id
     message = update.message.text
+    for speaker in speakers:
+        if speaker[-1] == 1:
+            id_speaker = speaker[1]
+            speaker_name = speaker[2]
+    bot = telegram.Bot(token=tg_token)
+    bot.send_message(chat_id=id_speaker, text=update.message.text)
+    bot.send_message(chat_id=chat_id, text=f'Ваше сообщение отправлено для спикера:"{speaker_name}"')
     with sqlite3.connect('db.sqlite3') as db:
         cur = db.cursor()
         cur.execute(
-            'INSERT INTO Chat (chat_id, message) VALUES (?, ?)',
-            (chat_id, message)
+            'INSERT INTO Chat (chat_id, message, id_speaker) VALUES (?, ?, ?)',
+            (chat_id, message, id_speaker)
             )
         db.commit()
 
@@ -46,6 +51,7 @@ def create_speakers_list(speakers, speakers_id):
         speakers.append(info)
     for info in speakers:
         speakers_id.append(info[1])
+
 
 
 def create_date(info):
@@ -119,6 +125,10 @@ def add_text_speaker():
 
 
 def send_message_for_speaker(update, context):
+    for speaker in speakers:
+        if speaker[-1] == 1:
+            chat_id = speaker[1]
+
     query = update.callback_query
     query.answer()
     keyboard = [
@@ -137,6 +147,8 @@ def send_message_for_speaker(update, context):
 
 
 def theme_spiker(update, _):
+    speakers.clear()
+    create_speakers_list(speakers, speakers_id)
     query = update.callback_query
     query.answer()
     for info in speakers:
@@ -176,8 +188,7 @@ def start(update, _):
             [
                 InlineKeyboardButton("Меню", callback_data=str(ONE)),
                 InlineKeyboardButton("Докладчики", callback_data=str(TWO)),
-                InlineKeyboardButton("F.A.Q", callback_data=str(THREE)),
-                InlineKeyboardButton("Покинуть", callback_data=str(FOUR)),
+                InlineKeyboardButton("F.A.Q", callback_data=str(THREE))
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -192,8 +203,7 @@ def start(update, _):
             [InlineKeyboardButton("Начать доклад", callback_data=str(SIX))],
             [
                 InlineKeyboardButton("Докладчики", callback_data=str(TWO)),
-                InlineKeyboardButton("F.A.Q", callback_data=str(THREE)),
-                InlineKeyboardButton("Покинуть", callback_data=str(FOUR)),
+                InlineKeyboardButton("F.A.Q", callback_data=str(THREE))
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -222,8 +232,7 @@ def open_menu(update, _):
             [
                 InlineKeyboardButton("Меню", callback_data=str(ONE)),
                 InlineKeyboardButton("Докладчики", callback_data=str(TWO)),
-                InlineKeyboardButton("F.A.Q", callback_data=str(THREE)),
-                InlineKeyboardButton("Покинуть", callback_data=str(FOUR)),
+                InlineKeyboardButton("F.A.Q", callback_data=str(THREE))
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -238,8 +247,7 @@ def open_menu(update, _):
             [InlineKeyboardButton("Закончить доклад", callback_data=str(SEVEN))],
             [
                 InlineKeyboardButton("Докладчики", callback_data=str(TWO)),
-                InlineKeyboardButton("F.A.Q", callback_data=str(THREE)),
-                InlineKeyboardButton("Покинуть", callback_data=str(FOUR)),
+                InlineKeyboardButton("F.A.Q", callback_data=str(THREE))
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -252,6 +260,8 @@ def open_menu(update, _):
 
 def open_speakers(update, _):
     """Показ нового выбора кнопок"""
+    speakers.clear()
+    create_speakers_list(speakers, speakers_id)
     query = update.callback_query
     query.answer()
     keyboard_speaker = []
@@ -260,12 +270,8 @@ def open_speakers(update, _):
             name[2], callback_data=str(name[1] + 'open_speakers'))
         ])
     keyboard_menu = [
-            [InlineKeyboardButton(
-                "Описание программы", callback_data=str(ONE)
-            ),
-            InlineKeyboardButton("Меню", callback_data=str(ONE)),
-            InlineKeyboardButton("F.A.Q", callback_data=str(THREE)),
-            InlineKeyboardButton("Покинуть", callback_data=str(FOUR))],
+            [InlineKeyboardButton("Меню", callback_data=str(ONE)),
+            InlineKeyboardButton("F.A.Q", callback_data=str(THREE))]
         ]
     keyboard_total = keyboard_speaker + keyboard_menu
     reply_markup = InlineKeyboardMarkup(keyboard_total)
@@ -277,31 +283,34 @@ def open_speakers(update, _):
 
 def open_faq(update, _):
     """Показ нового выбора кнопок"""
-    query = update.callback_query
-    query.answer()
-    keyboard = [
-        [
-            InlineKeyboardButton("Меню", callback_data=str(ONE)),
-            InlineKeyboardButton("Описание программы", callback_data=str(ONE)),
-            InlineKeyboardButton("Список докладчиков", callback_data=str(TWO)),
-            InlineKeyboardButton("Покинуть", callback_data=str(FOUR)),
-        ]
-    ]
+    speakers.clear()
+    create_speakers_list(speakers, speakers_id)
+    for speaker in speakers:
+        if speaker[-1] == 1:
+            text = f'В данный момент выступает спикер {speaker[2]}'
+            speaker_name = speaker[2]
+            speaker_id = speaker[1] + 'open_speakers'
+            keyboard = [[InlineKeyboardButton(speaker_name, callback_data=str(speaker_id))],
+                        [
+                            InlineKeyboardButton("Меню", callback_data=str(ONE)),
+                            InlineKeyboardButton("Докладчики", callback_data=str(TWO)),
+                        ]
+                        ]
+        else:
+            text = 'На данный момент никто не выступает'
+            query = update.callback_query
+            query.answer()
+            keyboard = [
+                    [
+                    InlineKeyboardButton("Меню", callback_data=str(ONE)),
+                    InlineKeyboardButton("Докладчики", callback_data=str(TWO)),
+                ]
+            ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     query.edit_message_text(
-        text="Дополнительные материалы к встрече", reply_markup=reply_markup
+        text=text, reply_markup=reply_markup
     )
     return FIRST
-
-
-def end(update, _):
-    """Возвращает `ConversationHandler.END`, который говорит
-    `ConversationHandler` что разговор окончен"""
-    query = update.callback_query
-    query.answer()
-    end_text = 'Спасибо, что слушаете нас'
-    query.edit_message_text(text=end_text)
-    return ConversationHandler.END
 
 
 def main():
@@ -321,9 +330,6 @@ def main():
                 ),
                 CallbackQueryHandler(
                     open_faq, pattern='^' + str(THREE) + '$'
-                ),
-                CallbackQueryHandler(
-                    end, pattern='^' + str(FOUR) + '$'
                 ),
                 CallbackQueryHandler(
                     send_message_for_speaker, pattern='^' + str(FIVE) + '$'
@@ -368,7 +374,6 @@ def main():
     )
     updater.start_polling()
     updater.idle()
-    print(main_handler)
 
 
 if __name__ == "__main__":
