@@ -13,6 +13,8 @@ from telegram.ext import (
 )
 
 locale.setlocale(locale.LC_ALL, "ru")
+tg_token = os.environ.get("TG_TOKEN")
+
 speakers = []
 speakers_id = []
 load_dotenv()
@@ -27,21 +29,33 @@ ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN = range(7)
 def main_handler(update, context):
     chat_id = update.message.chat.id
     message = update.message.text
+    bot = telegram.Bot(token=tg_token)
     for speaker in speakers:
         if speaker[-1] == 1:
             speaker_id = speaker[1]
             speaker_name = speaker[2]
-    bot = telegram.Bot(token=tg_token)
+
     if str(speaker_id) != str(chat_id):
-        bot.send_message(chat_id=speaker_id, text=update.message.text)
-    bot.send_message(chat_id=chat_id, text=f'Ваше сообщение отправлено для спикера:"{speaker_name}"')
+        keyboard = [[InlineKeyboardButton("Ответить", callback_data=str(FOUR))]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        bot.send_message(chat_id=speaker_id, text=update.message.text, reply_markup=reply_markup)
+        bot.send_message(chat_id=chat_id, text=f'Ваше сообщение отправлено для спикера:"{speaker_name}"')
     with sqlite3.connect('db.sqlite3') as db:
         cur = db.cursor()
         cur.execute(
             'INSERT INTO Chat (chat_id, message, id_speaker) VALUES (?, ?, ?)',
-            (chat_id, message, id_speaker)
+            (chat_id, message, speaker_id)
             )
         db.commit()
+    return FIRST
+
+def reply_user(update, _):
+    query = update.callback_query
+    query.answer()
+    bot = telegram.Bot(token=tg_token)
+    bot.send_message(chat_id=query.message.chat.id, text=input())
+    print(query)
+
 
 
 def create_speakers_list(speakers, speakers_id):
@@ -65,16 +79,6 @@ def create_date(info):
     return start_time, finish_date
 
 
-def Reply_to_message(update, _):
-    query = update.callback_query
-    query.answer()
-    keyboard = [InlineKeyboardButton("Закончить доклад", callback_data=str(SEVEN))]
-    theme_text = 'dasdasdas'
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    query.edit_message_text(
-        text=theme_text, reply_markup=reply_markup
-    )
-
 def start_report(update, _):
     speaker_id = update.callback_query.message.chat.id
     query = update.callback_query
@@ -96,7 +100,7 @@ def start_report(update, _):
         sql_stop_report = f'Update bot_db_speaker set time_start = "{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}" where telegram_id = {speaker_id}'
         cur.execute(sql_update_query)
         cur.execute(sql_stop_report)
-
+    return FIRST
 
 
 def stop_report(update, _):
@@ -119,6 +123,7 @@ def stop_report(update, _):
         sql_stop_report = f'Update bot_db_speaker set time_stop = "{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}" where telegram_id = {speaker_id}'
         cur.execute(sql_update_query)
         cur.execute(sql_stop_report)
+    return FIRST
 
 
 def add_text_speaker():
@@ -139,7 +144,6 @@ def send_message_for_speaker(update, context):
     for speaker in speakers:
         if speaker[-1] == 1:
             chat_id = speaker[1]
-
     query = update.callback_query
     query.answer()
     keyboard = [
@@ -352,7 +356,7 @@ def main():
                     stop_report, pattern='^' + str(SEVEN) + '$'
                 ),
                 CallbackQueryHandler(
-                    Reply_to_message, pattern='^' + str(FOUR) + '$'
+                    reply_user, pattern='^' + str(FOUR) + '$'
                 )
                 ]
     for info_speaker in speakers:
@@ -384,6 +388,9 @@ def main():
     dispatcher.add_handler(conv_handler)
     dispatcher.add_handler(
         telegram.ext.MessageHandler(telegram.ext.Filters.text, main_handler)
+    )
+    updater.dispatcher.add_handler(
+        telegram.ext.MessageHandler(telegram.ext.Filters.text, reply_user)
     )
     updater.start_polling()
     updater.idle()
