@@ -17,6 +17,7 @@ tg_token = os.environ.get("TG_TOKEN")
 
 speakers = []
 speakers_id = []
+messages = []
 load_dotenv()
 tg_token = os.environ.get("TG_TOKEN")
 
@@ -29,6 +30,7 @@ ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN = range(7)
 def main_handler(update, context):
     chat_id = update.message.chat.id
     message = update.message.text
+    update_id = update.update_id
     bot = telegram.Bot(token=tg_token)
     for speaker in speakers:
         if speaker[-1] == 1:
@@ -43,18 +45,20 @@ def main_handler(update, context):
     with sqlite3.connect('db.sqlite3') as db:
         cur = db.cursor()
         cur.execute(
-            'INSERT INTO Chat (chat_id, message, id_speaker) VALUES (?, ?, ?)',
-            (chat_id, message, speaker_id)
+            'INSERT INTO Chat (chat_id, update_id, message, id_speaker) VALUES (?, ?, ?, ?)',
+            (chat_id, update_id, message, speaker_id)
             )
         db.commit()
     return FIRST
 
 def reply_user(update, _):
-    query = update.callback_query
-    query.answer()
-    bot = telegram.Bot(token=tg_token)
-    bot.send_message(chat_id=query.message.chat.id, text=input())
-    print(query)
+    print(update)
+    messages.clear()
+    with sqlite3.connect('db.sqlite3') as db:
+        cur = db.cursor()
+    for info in cur.execute("SELECT * FROM Chat;"):
+        messages.append(info)
+    print(messages)
 
 
 
