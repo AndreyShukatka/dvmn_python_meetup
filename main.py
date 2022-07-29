@@ -29,10 +29,11 @@ def main_handler(update, context):
     message = update.message.text
     for speaker in speakers:
         if speaker[-1] == 1:
-            id_speaker = speaker[1]
+            speaker_id = speaker[1]
             speaker_name = speaker[2]
     bot = telegram.Bot(token=tg_token)
-    bot.send_message(chat_id=id_speaker, text=update.message.text)
+    if str(speaker_id) != str(chat_id):
+        bot.send_message(chat_id=speaker_id, text=update.message.text)
     bot.send_message(chat_id=chat_id, text=f'Ваше сообщение отправлено для спикера:"{speaker_name}"')
     with sqlite3.connect('db.sqlite3') as db:
         cur = db.cursor()
@@ -63,6 +64,16 @@ def create_date(info):
         ).strftime('%d %b %H:%M')
     return start_time, finish_date
 
+
+def Reply_to_message(update, _):
+    query = update.callback_query
+    query.answer()
+    keyboard = [InlineKeyboardButton("Закончить доклад", callback_data=str(SEVEN))]
+    theme_text = 'dasdasdas'
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.edit_message_text(
+        text=theme_text, reply_markup=reply_markup
+    )
 
 def start_report(update, _):
     speaker_id = update.callback_query.message.chat.id
@@ -339,9 +350,11 @@ def main():
                 ),
                 CallbackQueryHandler(
                     stop_report, pattern='^' + str(SEVEN) + '$'
+                ),
+                CallbackQueryHandler(
+                    Reply_to_message, pattern='^' + str(FOUR) + '$'
                 )
-
-            ]
+                ]
     for info_speaker in speakers:
         first.append(CallbackQueryHandler(
             theme_spiker, pattern='^' + str(info_speaker[1] + 'open_speakers') + '$'
