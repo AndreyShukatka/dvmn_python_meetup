@@ -2,7 +2,7 @@ import os
 import json
 import datetime
 import locale
-from utils import db_to_json
+from utils import db_to_json, db_to_json_dic
 import sqlite3
 import telegram
 from dotenv import load_dotenv
@@ -20,10 +20,8 @@ bot_db_program = []
 bot_db_speaker = []
 
 
-
-
-
 def start(update, _):
+    query = update.callback_query
     keyboard = [
         [
             InlineKeyboardButton("Меню", callback_data=str(ONE)),
@@ -56,24 +54,24 @@ def open_menu(update, _):
 def open_description(update, _):
     query = update.callback_query
     query.answer()
-    keyboard = [InlineKeyboardButton('Назад', callback_data=str(TWO))]
+    keyboard = [[InlineKeyboardButton('Назад', callback_data=str(query.data))]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    theme_text = "Здравствуйте. Это официальный бот по поддержке участников 🤖."
+    theme_text = "oppa"
     query.edit_message_text(
         text=theme_text, reply_markup=reply_markup
     )
     return FIRST
 
 def open_program(update, _):
-    answer = db_to_json("SELECT DISTINCT top_block FROM bot_db_program")
-    formatted = json.loads(answer)
+    sql_query = "SELECT DISTINCT top_block FROM bot_db_program"
+    formatted = db_to_json(sql_query)
     query = update.callback_query
     query.answer()
     keyboard = [
         [InlineKeyboardButton('Назад', callback_data=str(ONE))]
     ]
     for item in formatted:
-        keyboard.append([InlineKeyboardButton(item[0], callback_data=str(item[0]))])
+        keyboard.append([InlineKeyboardButton(item, callback_data=str(item))])
     reply_markup = InlineKeyboardMarkup(keyboard)
     theme_text = "Здравствуйте. Это официальный бот по поддержке участников 🤖."
     query.edit_message_text(
@@ -84,11 +82,13 @@ def open_program(update, _):
 
 def open_opening_events(update, _):
     query = update.callback_query
-    answer = db_to_json(f"SELECT bottom_block FROM bot_db_program WHERE top_block='{query.data}'")
-    formatted = json.loads(answer)
+    print(query.data)
+    sql_query = f'SELECT id, bottom_block FROM bot_db_program WHERE top_block = \'{query.data}\''
+    formatted = db_to_json_dic(sql_query)
     query.answer()
     keyboard = [[InlineKeyboardButton('Назад', callback_data=str(TWO))]]
-    keyboard.append([InlineKeyboardButton(program_name, callback_data=str(program_name))])
+    for info in formatted:
+        keyboard.append([InlineKeyboardButton(info[1], callback_data=str(info[0]) +'event')])
     reply_markup = InlineKeyboardMarkup(keyboard)
     theme_text = "Здравствуйте. Это официальный бот по поддержке участников 🤖."
     query.edit_message_text(
@@ -96,24 +96,12 @@ def open_opening_events(update, _):
     )
     return FIRST
 
-def output_db():
-    with sqlite3.connect('db2.sqlite3') as db:
-        cur = db.cursor()
-        for info in cur.execute("SELECT * FROM bot_db_program;"):
-            bot_db_program.append(info)
-        for info in cur.execute("SELECT * FROM bot_db_speaker;"):
-            bot_db_speaker.append(info)
-    return bot_db_program, bot_db_speaker
 
 def main():
-    bot_db_program, bot_db_speaker = output_db()
     load_dotenv()
     tg_token = os.environ.get("TG_TOKEN")
     updater = Updater(tg_token)
     dispatcher = updater.dispatcher
-    programs_names = []
-    speakers_programs_name = []
-    descriptions = []
     second = []
     first = [
         CallbackQueryHandler(
@@ -123,21 +111,21 @@ def main():
             open_program, pattern='^' + str(TWO) + '$'
         ),
         CallbackQueryHandler(
-            open_description, pattern='^' + str(THREE) + '$'
-        )
-    ]
+            open_description, pattern='^' + str(THREE) + '$')
 
-    for name_program in bot_db_program:
-        programs_names.append(name_program[1])
-        descriptions.append(name_program[3])
-    for speaker_name_program in bot_db_speaker:
-        speakers_programs_name.append(speaker_name_program[3])
-    answer = db_to_json("SELECT DISTINCT top_block FROM bot_db_program")
-    formatted = json.loads(answer)
+    ]
+    sql_query = "SELECT DISTINCT top_block FROM bot_db_program"
+    formatted = db_to_json(sql_query)
     for item in formatted:
         first.append(CallbackQueryHandler(
-            open_opening_events, pattern=str(item[0]
-        )))
+            open_opening_events, pattern= '^' + str(item) + '$'
+        ))
+    sql_query = "SELECT DISTINCT id FROM bot_db_program"
+    id = db_to_json_dic(sql_query)
+    for number in id:
+        first.append(CallbackQueryHandler(
+            open_description, pattern= '^' + str(number) + 'event' + '$'
+        ))
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
