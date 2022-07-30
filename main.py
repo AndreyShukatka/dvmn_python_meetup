@@ -18,6 +18,9 @@ bot_db_program = []
 bot_db_speaker = []
 
 
+
+
+
 def start(update, _):
     keyboard = [
         [
@@ -80,7 +83,7 @@ def open_program(update, _):
     programs_names = []
     for name_program in bot_db_program:
         programs_names.append(name_program[1])
-    for program_name in set(programs_names):
+    for program_name in list(dict.fromkeys(programs_names)):
         keyboard.append([InlineKeyboardButton(program_name, callback_data=str(program_name))])
     reply_markup = InlineKeyboardMarkup(keyboard)
     theme_text = "Здравствуйте. Это официальный бот по поддержке участников 🤖."
@@ -101,8 +104,8 @@ def open_opening_events(update, _):
             programs_names.append(name_program[2])
     for description in bot_db_program:
         descriptions.append([description[2], description[3]])
-    for program_name in set(programs_names):
-        keyboard.append([InlineKeyboardButton(program_name, callback_data=str(THREE))])
+    for program_name in list(dict.fromkeys(programs_names)):
+        keyboard.append([InlineKeyboardButton(program_name, callback_data=str(program_name))])
     reply_markup = InlineKeyboardMarkup(keyboard)
     theme_text = "Здравствуйте. Это официальный бот по поддержке участников 🤖."
     query.edit_message_text(
@@ -117,10 +120,10 @@ def output_db():
             bot_db_program.append(info)
         for info in cur.execute("SELECT * FROM bot_db_speaker;"):
             bot_db_speaker.append(info)
-output_db()
+    return bot_db_program, bot_db_speaker
 
 def main():
-    output_db()
+    bot_db_program, bot_db_speaker = output_db()
     load_dotenv()
     tg_token = os.environ.get("TG_TOKEN")
     updater = Updater(tg_token)
@@ -149,8 +152,8 @@ def main():
         descriptions.append(name_program[3])
     for speaker_name_program in bot_db_speaker:
         speakers_programs_name.append(speaker_name_program[3])
-    speakers_programs_name = set(speakers_programs_name)
-    programs_names = set(programs_names)
+    speakers_programs_name = list(dict.fromkeys(speakers_programs_name))
+    programs_names = list(dict.fromkeys(programs_names))
     for speaker_program_name in speakers_programs_name:
         first.append(CallbackQueryHandler(
             speakrs_menu, pattern='^' + str(speaker_program_name) + '$'
