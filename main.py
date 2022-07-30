@@ -56,9 +56,11 @@ def main_handler(update, context):
         db.commit()
     return FIRST
 
-def reply_user(update, _):
+def reply_user(update, context):
     bot = telegram.Bot(token=tg_token)
-    messages.clear()
+    print(update)
+    context.bot.send_message(chat_id=update.effective_chat.id,
+                             text="I'm a bot, please talk to me!")
     with sqlite3.connect('db.sqlite3') as db:
         cur = db.cursor()
     for info in cur.execute("SELECT * FROM Chat;"):
