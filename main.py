@@ -1,6 +1,8 @@
 import os
+import json
 import datetime
 import locale
+from utils import db_to_json
 import sqlite3
 import telegram
 from dotenv import load_dotenv
@@ -51,20 +53,6 @@ def open_menu(update, _):
     return FIRST
 
 
-def speakrs_menu(update, _):
-    query = update.callback_query
-    query.answer()
-    programs_names = []
-    for name_program in bot_db_program:
-        programs_names.append(name_program[1])
-    keyboard = [InlineKeyboardButton('Назад', callback_data=str(TWO))]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    theme_text = "Здравствуйте. Это официальный бот по поддержке участников 🤖."
-    query.edit_message_text(
-        text=theme_text, reply_markup=reply_markup
-    )
-    return FIRST
-
 def open_description(update, _):
     query = update.callback_query
     query.answer()
@@ -77,14 +65,15 @@ def open_description(update, _):
     return FIRST
 
 def open_program(update, _):
+    answer = db_to_json("SELECT DISTINCT top_block FROM bot_db_program")
+    formatted = json.loads(answer)
     query = update.callback_query
     query.answer()
-    keyboard = [[InlineKeyboardButton('Назад', callback_data=str(ONE))]]
-    programs_names = []
-    for name_program in bot_db_program:
-        programs_names.append(name_program[1])
-    for program_name in list(dict.fromkeys(programs_names)):
-        keyboard.append([InlineKeyboardButton(program_name, callback_data=str(program_name))])
+    keyboard = [
+        [InlineKeyboardButton('Назад', callback_data=str(ONE))]
+    ]
+    for item in formatted:
+        keyboard.append([InlineKeyboardButton(item[0], callback_data=str(item[0]))])
     reply_markup = InlineKeyboardMarkup(keyboard)
     theme_text = "Здравствуйте. Это официальный бот по поддержке участников 🤖."
     query.edit_message_text(
@@ -95,17 +84,11 @@ def open_program(update, _):
 
 def open_opening_events(update, _):
     query = update.callback_query
+    answer = db_to_json(f"SELECT bottom_block FROM bot_db_program WHERE top_block='{query.data}'")
+    formatted = json.loads(answer)
     query.answer()
     keyboard = [[InlineKeyboardButton('Назад', callback_data=str(TWO))]]
-    descriptions = []
-    programs_names = []
-    for name_program in bot_db_program:
-        if str(query.data) == str(name_program[1]):
-            programs_names.append(name_program[2])
-    for description in bot_db_program:
-        descriptions.append([description[2], description[3]])
-    for program_name in list(dict.fromkeys(programs_names)):
-        keyboard.append([InlineKeyboardButton(program_name, callback_data=str(program_name))])
+    keyboard.append([InlineKeyboardButton(program_name, callback_data=str(program_name))])
     reply_markup = InlineKeyboardMarkup(keyboard)
     theme_text = "Здравствуйте. Это официальный бот по поддержке участников 🤖."
     query.edit_message_text(
@@ -141,9 +124,6 @@ def main():
         ),
         CallbackQueryHandler(
             open_description, pattern='^' + str(THREE) + '$'
-        ),
-        CallbackQueryHandler(
-            speakrs_menu, pattern='^' + str(FOUR) + '$'
         )
     ]
 
@@ -152,20 +132,12 @@ def main():
         descriptions.append(name_program[3])
     for speaker_name_program in bot_db_speaker:
         speakers_programs_name.append(speaker_name_program[3])
-    speakers_programs_name = list(dict.fromkeys(speakers_programs_name))
-    programs_names = list(dict.fromkeys(programs_names))
-    for speaker_program_name in speakers_programs_name:
+    answer = db_to_json("SELECT DISTINCT top_block FROM bot_db_program")
+    formatted = json.loads(answer)
+    for item in formatted:
         first.append(CallbackQueryHandler(
-            speakrs_menu, pattern='^' + str(speaker_program_name) + '$'
-        ))
-    for program_name in programs_names:
-        first.append(CallbackQueryHandler(
-            open_opening_events, pattern='^' + str(program_name) + '$'
-        ))
-    for description in descriptions:
-        first.append(CallbackQueryHandler(
-            open_description, pattern='^' + str(description) + '$'
-        ))
+            open_opening_events, pattern=str(item[0]
+        )))
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
