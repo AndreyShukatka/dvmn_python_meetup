@@ -27,12 +27,14 @@ FIRST, SECOND = range(2)
 ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN = range(7)
 
 
+
 def main_handler(update, context):
     speakers.clear()
     speakers_id.clear()
     create_speakers_list(speakers, speakers_id)
     chat_id = update.message.chat.id
     message = update.message.text
+    user_name = update.message.chat.first_name
     update_id = update.update_id
     bot = telegram.Bot(token=tg_token)
     for speaker in speakers:
@@ -48,20 +50,28 @@ def main_handler(update, context):
     with sqlite3.connect('db.sqlite3') as db:
         cur = db.cursor()
         cur.execute(
-            'INSERT INTO Chat (chat_id, update_id, message, id_speaker) VALUES (?, ?, ?, ?)',
-            (chat_id, update_id, message, speaker_id)
+            'INSERT INTO Chat (chat_id, update_id, message, id_speaker, user_name) VALUES (?, ?, ?, ?, ?)',
+            (chat_id, update_id, message, speaker_id, user_name)
             )
         db.commit()
     return FIRST
 
 def reply_user(update, _):
-    print(update)
+    bot = telegram.Bot(token=tg_token)
     messages.clear()
     with sqlite3.connect('db.sqlite3') as db:
         cur = db.cursor()
     for info in cur.execute("SELECT * FROM Chat;"):
         messages.append(info)
-    print(messages)
+    for message in messages:
+        if str(message[2]) == str(update.callback_query.message.text):
+            bot.send_message(chat_id=message[0], text='dasas')
+            bot.send_message(chat_id=message[-2], text=f'Вы ответили пользователю {message[-1]}')
+            with sqlite3.connect('db.sqlite3') as db:
+                cur = db.cursor()
+                cur.execute(
+                    'DELETE FROM Chat WHERE message = ?',(message[2],))
+                db.commit()
 
 
 
