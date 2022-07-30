@@ -28,6 +28,9 @@ ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN = range(7)
 
 
 def main_handler(update, context):
+    speakers.clear()
+    speakers_id.clear()
+    create_speakers_list(speakers, speakers_id)
     chat_id = update.message.chat.id
     message = update.message.text
     update_id = update.update_id
