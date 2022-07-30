@@ -12,408 +12,169 @@ from telegram.ext import (
     ConversationHandler,
 )
 
-locale.setlocale(locale.LC_ALL, "ru")
-tg_token = os.environ.get("TG_TOKEN")
-
-speakers = []
-speakers_id = []
-messages = []
-load_dotenv()
-tg_token = os.environ.get("TG_TOKEN")
-
-# Этапы/состояния разговора
 FIRST, SECOND = range(2)
-# Данные обратного вызова
 ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN = range(7)
-
-
-
-def main_handler(update, context):
-    speakers.clear()
-    speakers_id.clear()
-    create_speakers_list(speakers, speakers_id)
-    chat_id = update.message.chat.id
-    message = update.message.text
-    user_name = update.message.chat.first_name
-    update_id = update.update_id
-    bot = telegram.Bot(token=tg_token)
-    for speaker in speakers:
-        if speaker[-1] == 1:
-            speaker_id = speaker[1]
-            speaker_name = speaker[2]
-
-    if str(speaker_id) != str(chat_id):
-        keyboard = [[InlineKeyboardButton("Ответить", callback_data=str(FOUR))]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        bot.send_message(chat_id=speaker_id, text=update.message.text, reply_markup=reply_markup)
-        bot.send_message(chat_id=chat_id, text=f'Ваше сообщение отправлено для спикера:"{speaker_name}"')
-    with sqlite3.connect('db.sqlite3') as db:
-        cur = db.cursor()
-        cur.execute(
-            'INSERT INTO Chat (chat_id, update_id, message, id_speaker, user_name) VALUES (?, ?, ?, ?, ?)',
-            (chat_id, update_id, message, speaker_id, user_name)
-            )
-        db.commit()
-    return FIRST
-
-def reply_user(update, context):
-    bot = telegram.Bot(token=tg_token)
-    print(update)
-    context.bot.send_message(chat_id=update.effective_chat.id,
-                             text="I'm a bot, please talk to me!")
-    with sqlite3.connect('db.sqlite3') as db:
-        cur = db.cursor()
-    for info in cur.execute("SELECT * FROM Chat;"):
-        messages.append(info)
-    for message in messages:
-        if str(message[2]) == str(update.callback_query.message.text):
-            bot.send_message(chat_id=message[0], text='dasas')
-            bot.send_message(chat_id=message[-2], text=f'Вы ответили пользователю {message[-1]}')
-            with sqlite3.connect('db.sqlite3') as db:
-                cur = db.cursor()
-                cur.execute(
-                    'DELETE FROM Chat WHERE message = ?',(message[2],))
-                db.commit()
-
-
-
-def create_speakers_list(speakers, speakers_id):
-
-    with sqlite3.connect('db.sqlite3') as db:
-        cur = db.cursor()
-    for info in cur.execute("SELECT * FROM bot_db_speaker;"):
-        speakers.append(info)
-    for info in speakers:
-        speakers_id.append(info[1])
-
-
-
-def create_date(info):
-    start_time = datetime.datetime.strptime(
-        info[4], "%Y-%m-%d %H:%M:%S"
-        ).strftime('%d %b %H:%M')
-    finish_date = datetime.datetime.strptime(
-        info[5], "%Y-%m-%d %H:%M:%S"
-        ).strftime('%d %b %H:%M')
-    return start_time, finish_date
-
-
-def start_report(update, _):
-    speaker_id = update.callback_query.message.chat.id
-    query = update.callback_query
-    query.answer()
-    time = datetime.datetime.now()
-    keyboard = [
-        [InlineKeyboardButton("Закончить доклад", callback_data=str(SEVEN))],
-        [InlineKeyboardButton("Докладчики", callback_data=str(TWO)),
-         InlineKeyboardButton("Меню", callback_data=str(ONE))],
-        ]
-    theme_text = f"Доклад начался в {time.strftime('%H:%M:%S %Y-%m-%d')}"
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    query.edit_message_text(
-        text=theme_text, reply_markup=reply_markup
-    )
-    with sqlite3.connect('db.sqlite3') as db:
-        cur = db.cursor()
-        sql_update_query = f"Update bot_db_speaker set recording_progress = 1 where telegram_id = {speaker_id}"
-        sql_stop_report = f'Update bot_db_speaker set time_start = "{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}" where telegram_id = {speaker_id}'
-        cur.execute(sql_update_query)
-        cur.execute(sql_stop_report)
-    return FIRST
-
-
-def stop_report(update, _):
-    speaker_id = update.callback_query.message.chat.id
-    query = update.callback_query
-    query.answer()
-    time = datetime.datetime.now()
-    keyboard = [
-        [InlineKeyboardButton("Докладчики", callback_data=str(TWO)),
-         InlineKeyboardButton("Меню", callback_data=str(ONE))],
-    ]
-    theme_text = f"Доклад закончился в {time.strftime('%H:%M:%S %Y-%m-%d')}"
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    query.edit_message_text(
-        text=theme_text, reply_markup=reply_markup
-    )
-    with sqlite3.connect('db.sqlite3') as db:
-        cur = db.cursor()
-        sql_update_query = f"Update bot_db_speaker set recording_progress = '' where telegram_id = {speaker_id}"
-        sql_stop_report = f'Update bot_db_speaker set time_stop = "{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}" where telegram_id = {speaker_id}'
-        cur.execute(sql_update_query)
-        cur.execute(sql_stop_report)
-    return FIRST
-
-
-def add_text_speaker():
-    all_text = f'С докладом сегодня выступает:\n'
-    n = 1
-    for info in speakers:
-        create_date(info)
-        info_text = f'Спикер №{n} {info[2]}\n'\
-                    f'-Тема"{info[3]}"\n'\
-                    f'-Начало вещяния {create_date(info)[0]}\n'\
-                    f'-Конец вещяния {create_date(info)[1]}\n'
-        all_text = all_text + info_text
-        n += 1
-    return all_text
-
-
-def send_message_for_speaker(update, context):
-    for speaker in speakers:
-        if speaker[-1] == 1:
-            chat_id = speaker[1]
-    query = update.callback_query
-    query.answer()
-    keyboard = [
-            [InlineKeyboardButton("Докладчики", callback_data=str(TWO)),
-            InlineKeyboardButton("Меню", callback_data=str(ONE))]
-    ]
-    for info in speakers:
-        if info[1]+'send_message_for_speaker' == query.data:
-            theme_text = f"Напишите Ваш вопрос для докладчика {info[2]}"
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            query.edit_message_text(
-                text=theme_text, reply_markup=reply_markup
-            )
-
-    return FIRST
-
-
-def theme_spiker(update, _):
-    speakers.clear()
-    create_speakers_list(speakers, speakers_id)
-    query = update.callback_query
-    query.answer()
-    for info in speakers:
-        if info[1]+'open_speakers' == query.data:
-            theme_text = f'Выбран {info[2]}\nТема доклада "{info[3]}"\n' \
-                         f'Начало выступления {create_date(info)[0]}\n' \
-                         f"Окончаниеи выступления {create_date(info)[1]}"
-            keyboard = [
-                    [InlineKeyboardButton(
-                        "Задать вопрос",
-                        callback_data=str(info[1]+'send_message_for_speaker')
-                    )],
-                    [InlineKeyboardButton(
-                        "Докладчики", callback_data=str(TWO)
-                    ),
-                    InlineKeyboardButton("Меню", callback_data=str(ONE))]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            query.edit_message_text(
-            text=theme_text, reply_markup=reply_markup
-            )
-    return FIRST
+bot_db_program = []
+bot_db_speaker = []
 
 
 def start(update, _):
-    superuser = False
-    for speaker_id in speakers_id:
-        if str(update.message.chat.id) == str(speaker_id):
-            superuser = True
-    if superuser == False:
-        """Вызывается по команде `/start`."""
-        # Создаем `InlineKeyboard`, где каждая кнопка имеет
-        # отображаемый текст и строку `callback_data`
-        # Клавиатура - это список строк кнопок, где каждая строка,
-        # в свою очередь, является списком `[[...]]`
-        keyboard = [
-            [
-                InlineKeyboardButton("Меню", callback_data=str(ONE)),
-                InlineKeyboardButton("Докладчики", callback_data=str(TWO)),
-                InlineKeyboardButton("F.A.Q", callback_data=str(THREE))
-            ]
+    keyboard = [
+        [
+            InlineKeyboardButton("Меню", callback_data=str(ONE)),
         ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        # Отправляем сообщение с текстом и добавленной клавиатурой `reply_markup`
-        update.message.reply_text(
-            text="Добро пожаловать на нашей встрече", reply_markup=reply_markup
-        )
-        # Сообщаем `ConversationHandler`, что сейчас состояние `FIRST`
-        return FIRST
-    else:
-        keyboard = [
-            [InlineKeyboardButton("Начать доклад", callback_data=str(SIX))],
-            [
-                InlineKeyboardButton("Докладчики", callback_data=str(TWO)),
-                InlineKeyboardButton("F.A.Q", callback_data=str(THREE))
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        # Отправляем сообщение с текстом и добавленной клавиатурой `reply_markup`
-        update.message.reply_text(
-            text="Добро пожаловать на нашей встрече", reply_markup=reply_markup
-        )
-        # Сообщаем `ConversationHandler`, что сейчас состояние `FIRST`
-        return FIRST
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    update.message.reply_text(
+        text="Здравствуйте. Это официальный бот по поддержке участников 🤖.", reply_markup=reply_markup
+    )
+    return FIRST
+
 
 def open_menu(update, _):
-    """Показ нового выбора кнопок"""
     query = update.callback_query
     query.answer()
-    superuser = False
-    for speaker_id in speakers_id:
-        if str(update.callback_query.message.chat.id) == str(speaker_id):
-            superuser = True
-    if superuser == False:
-        """Вызывается по команде `/start`."""
-        # Создаем `InlineKeyboard`, где каждая кнопка имеет
-        # отображаемый текст и строку `callback_data`
-        # Клавиатура - это список строк кнопок, где каждая строка,
-        # в свою очередь, является списком `[[...]]`
-        keyboard = [
-            [
-                InlineKeyboardButton("Меню", callback_data=str(ONE)),
-                InlineKeyboardButton("Докладчики", callback_data=str(TWO)),
-                InlineKeyboardButton("F.A.Q", callback_data=str(THREE))
-            ]
+    keyboard = [
+        [
+            InlineKeyboardButton("📋Программа", callback_data=str(TWO)),
+            InlineKeyboardButton("🗣Задать вопрос спикеру", callback_data=str(FOUR))
         ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        theme_text = "Тут из базы повестка нашей встречи"
-        query.edit_message_text(
-            text=theme_text, reply_markup=reply_markup
-        )
-        return FIRST
-    else:
-        keyboard = [
-            [InlineKeyboardButton("Начать доклад", callback_data=str(SIX))],
-            [InlineKeyboardButton("Закончить доклад", callback_data=str(SEVEN))],
-            [
-                InlineKeyboardButton("Докладчики", callback_data=str(TWO)),
-                InlineKeyboardButton("F.A.Q", callback_data=str(THREE))
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        theme_text = "Тут из базы повестка нашей встречи"
-        query.edit_message_text(
-            text=theme_text, reply_markup=reply_markup
-        )
-        return FIRST
-
-
-def open_speakers(update, _):
-    """Показ нового выбора кнопок"""
-    speakers.clear()
-    create_speakers_list(speakers, speakers_id)
-    query = update.callback_query
-    query.answer()
-    keyboard_speaker = []
-    for name in speakers:
-        keyboard_speaker.append([InlineKeyboardButton(
-            name[2], callback_data=str(name[1] + 'open_speakers'))
-        ])
-    keyboard_menu = [
-            [InlineKeyboardButton("Меню", callback_data=str(ONE)),
-            InlineKeyboardButton("F.A.Q", callback_data=str(THREE))]
-        ]
-    keyboard_total = keyboard_speaker + keyboard_menu
-    reply_markup = InlineKeyboardMarkup(keyboard_total)
-    query.edit_message_text(
-        text=add_text_speaker(), reply_markup=reply_markup
-    )
-    return FIRST
-
-
-def open_faq(update, _):
-    """Показ нового выбора кнопок"""
-    speakers.clear()
-    create_speakers_list(speakers, speakers_id)
-    for speaker in speakers:
-        if speaker[-1] == 1:
-            text = f'В данный момент выступает спикер {speaker[2]}'
-            speaker_name = speaker[2]
-            speaker_id = speaker[1] + 'open_speakers'
-            keyboard = [[InlineKeyboardButton(speaker_name, callback_data=str(speaker_id))],
-                        [
-                            InlineKeyboardButton("Меню", callback_data=str(ONE)),
-                            InlineKeyboardButton("Докладчики", callback_data=str(TWO)),
-                        ]
-                        ]
-        else:
-            text = 'На данный момент никто не выступает'
-            query = update.callback_query
-            query.answer()
-            keyboard = [
-                    [
-                    InlineKeyboardButton("Меню", callback_data=str(ONE)),
-                    InlineKeyboardButton("Докладчики", callback_data=str(TWO)),
-                ]
-            ]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
+    theme_text = "Здравствуйте. Это официальный бот по поддержке участников 🤖."
     query.edit_message_text(
-        text=text, reply_markup=reply_markup
+        text=theme_text, reply_markup=reply_markup
     )
     return FIRST
 
+
+def speakrs_menu(update, _):
+    query = update.callback_query
+    query.answer()
+    programs_names = []
+    for name_program in bot_db_program:
+        programs_names.append(name_program[1])
+    keyboard = [InlineKeyboardButton('Назад', callback_data=str(TWO))]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    theme_text = "Здравствуйте. Это официальный бот по поддержке участников 🤖."
+    query.edit_message_text(
+        text=theme_text, reply_markup=reply_markup
+    )
+    return FIRST
+
+def open_description(update, _):
+    query = update.callback_query
+    query.answer()
+    keyboard = [InlineKeyboardButton('Назад', callback_data=str(TWO))]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    theme_text = "Здравствуйте. Это официальный бот по поддержке участников 🤖."
+    query.edit_message_text(
+        text=theme_text, reply_markup=reply_markup
+    )
+    return FIRST
+
+def open_program(update, _):
+    query = update.callback_query
+    query.answer()
+    keyboard = [[InlineKeyboardButton('Назад', callback_data=str(ONE))]]
+    programs_names = []
+    for name_program in bot_db_program:
+        programs_names.append(name_program[1])
+    for program_name in set(programs_names):
+        keyboard.append([InlineKeyboardButton(program_name, callback_data=str(program_name))])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    theme_text = "Здравствуйте. Это официальный бот по поддержке участников 🤖."
+    query.edit_message_text(
+        text=theme_text, reply_markup=reply_markup
+    )
+    return FIRST
+
+
+def open_opening_events(update, _):
+    query = update.callback_query
+    query.answer()
+    keyboard = [[InlineKeyboardButton('Назад', callback_data=str(TWO))]]
+    descriptions = []
+    programs_names = []
+    for name_program in bot_db_program:
+        if str(query.data) == str(name_program[1]):
+            programs_names.append(name_program[2])
+    for description in bot_db_program:
+        descriptions.append([description[2], description[3]])
+    for program_name in set(programs_names):
+        keyboard.append([InlineKeyboardButton(program_name, callback_data=str(THREE))])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    theme_text = "Здравствуйте. Это официальный бот по поддержке участников 🤖."
+    query.edit_message_text(
+        text=theme_text, reply_markup=reply_markup
+    )
+    return FIRST
+
+def output_db():
+    with sqlite3.connect('db2.sqlite3') as db:
+        cur = db.cursor()
+        for info in cur.execute("SELECT * FROM bot_db_program;"):
+            bot_db_program.append(info)
+        for info in cur.execute("SELECT * FROM bot_db_speaker;"):
+            bot_db_speaker.append(info)
+output_db()
 
 def main():
-    add_text_speaker()
+    output_db()
     load_dotenv()
     tg_token = os.environ.get("TG_TOKEN")
     updater = Updater(tg_token)
     dispatcher = updater.dispatcher
-    create_speakers_list(speakers, speakers_id)
+    programs_names = []
+    speakers_programs_name = []
+    descriptions = []
     second = []
     first = [
-                CallbackQueryHandler(
-                    open_menu, pattern='^' + str(ONE) + '$'
-                ),
-                CallbackQueryHandler(
-                    open_speakers, pattern='^' + str(TWO) + '$'
-                ),
-                CallbackQueryHandler(
-                    open_faq, pattern='^' + str(THREE) + '$'
-                ),
-                CallbackQueryHandler(
-                    send_message_for_speaker, pattern='^' + str(FIVE) + '$'
-                ),
-                CallbackQueryHandler(
-                    start_report, pattern='^' + str(SIX) + '$'
-                ),
-                CallbackQueryHandler(
-                    stop_report, pattern='^' + str(SEVEN) + '$'
-                ),
-                CallbackQueryHandler(
-                    reply_user, pattern='^' + str(FOUR) + '$'
-                )
-                ]
-    for info_speaker in speakers:
-        first.append(CallbackQueryHandler(
-            theme_spiker, pattern='^' + str(info_speaker[1] + 'open_speakers') + '$'
-        ))
-        first.append(CallbackQueryHandler(
-            send_message_for_speaker,
-            pattern='^' + str(info_speaker[1] + 'send_message_for_speaker') + '$')
+        CallbackQueryHandler(
+            open_menu, pattern='^' + str(ONE) + '$'
+        ),
+        CallbackQueryHandler(
+            open_program, pattern='^' + str(TWO) + '$'
+        ),
+        CallbackQueryHandler(
+            open_description, pattern='^' + str(THREE) + '$'
+        ),
+        CallbackQueryHandler(
+            speakrs_menu, pattern='^' + str(FOUR) + '$'
         )
+    ]
 
-
-    # Настройка обработчика разговоров с состояниями `FIRST` и `SECOND`
-    # Используем параметр `pattern` для передачи `CallbackQueries` с
-    # определенным шаблоном данных соответствующим обработчикам
-    # ^ - означает "начало строки"
-    # $ - означает "конец строки"
-    # Таким образом, паттерн `^ABC$` будет ловить только 'ABC'
+    for name_program in bot_db_program:
+        programs_names.append(name_program[1])
+        descriptions.append(name_program[3])
+    for speaker_name_program in bot_db_speaker:
+        speakers_programs_name.append(speaker_name_program[3])
+    speakers_programs_name = set(speakers_programs_name)
+    programs_names = set(programs_names)
+    for speaker_program_name in speakers_programs_name:
+        first.append(CallbackQueryHandler(
+            speakrs_menu, pattern='^' + str(speaker_program_name) + '$'
+        ))
+    for program_name in programs_names:
+        first.append(CallbackQueryHandler(
+            open_opening_events, pattern='^' + str(program_name) + '$'
+        ))
+    for description in descriptions:
+        first.append(CallbackQueryHandler(
+            open_description, pattern='^' + str(description) + '$'
+        ))
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
-        states={  # словарь состояний разговора, возвращаемых callback функциями
+        states={
             FIRST: first,
             SECOND: second
         },
         fallbacks=[CommandHandler('start', start)],
     )
-    # Добавляем `ConversationHandler` в диспетчер, который
-    # будет использоваться для обработки обновлений
     dispatcher.add_handler(conv_handler)
-    dispatcher.add_handler(
-        telegram.ext.MessageHandler(telegram.ext.Filters.text, main_handler)
-    )
-    updater.dispatcher.add_handler(
-        telegram.ext.MessageHandler(telegram.ext.Filters.text, reply_user)
-    )
     updater.start_polling()
     updater.idle()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
